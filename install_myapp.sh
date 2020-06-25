@@ -144,4 +144,80 @@ echo '
 ' >/etc/consul.d/service_myapp.json
 consul reload
 
+echo "[9] - install linkerd"
+
+apt-get -y -q install openjdk-11-jdk >/dev/null 
+wget -q https://github.com/linkerd/linkerd/releases/download/1.6.2.2/linkerd-1.6.2.2-exec -P /usr/local/bin 
+chmod 755 /usr/local/bin/linkerd-1.6.2.2-exec 
+mkdir /etc/linkerd/
+
+echo '
+admin:
+  ip: 0.0.0.0
+  port: 9990
+routers:
+- protocol: http
+  label: /http-consul
+  service:
+    totalTimeoutMs: 20000
+    retries:
+      budget:
+        minRetriesPerSec: 5
+        percentCanRetry: 0.2
+        ttlSecs: 15
+      backoff:
+        kind: jittered
+        minMs: 2000
+        maxMs: 5000
+  servers:
+  - port: 4040
+    ip: 0.0.0.0
+  identifier:
+   kind: io.l5d.header.token
+  dtab: |
+       /svc => /#/192.168.58.10/mydc;
+  client:
+    failureAccrual:
+      kind: io.l5d.successRateWindowed
+      successRate: 0.7
+      window: 60
+    loadBalancer:
+      kind: p2c
+      maxEffort: 3
+
+
+namers:
+- kind: io.l5d.consul
+  host: 192.168.58.10
+  includeTag: false
+  useHealthCheck: true
+  prefix: /192.168.58.10
+  consistencyMode: stale
+  failFast: true
+
+
+telemetry:
+- kind: io.l5d.prometheus
+' > /etc/linkerd/linkerd.yml
+
+echo '[Unit]
+Description=Linkerd
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/linkerd-1.6.2.2-exec /etc/linkerd/linkerd.yml
+KillSignal=SIGINT
+TimeoutStopSec=10
+Restart=on-failure
+SyslogIdentifier=linkerd
+
+[Install]
+WantedBy=multi-user.target' > /etc/systemd/system/linkerd.service
+systemctl enable linkerd
+service linkerd start
+
 echo "END - install myapp $IP"
