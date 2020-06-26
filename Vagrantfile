@@ -40,4 +40,24 @@ numberSrv=3
       myapp.vm.provision "shell", path: "install_myapp.sh"
     end
   end
+
+  # prom server
+  config.vm.define "prom" do |prom|
+    prom.vm.box = "ubuntu/bionic64"
+    prom.vm.hostname = "prom"
+    prom.vm.box_url = "ubuntu/bionic64"
+    prom.vm.network :private_network, ip: "192.168.58.15"
+    prom.vm.provider :virtualbox do |v|
+      v.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+      v.customize ["modifyvm", :id, "--memory", 1024]
+      v.customize ["modifyvm", :id, "--name", "prom"]
+      v.customize ["modifyvm", :id, "--cpus", "1"]
+    end
+    config.vm.provision "shell", inline: <<-SHELL
+      sed -i 's/ChallengeResponseAuthentication no/ChallengeResponseAuthentication yes/g' /etc/ssh/sshd_config    
+      service ssh restart
+    SHELL
+    prom.vm.provision "shell", path: "install_prom.sh"
+  end
+  
 end

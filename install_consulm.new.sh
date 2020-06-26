@@ -77,81 +77,81 @@ SyslogIdentifier=consul
 WantedBy=multi-user.target' > /etc/systemd/system/consul.service
 
 echo "[6]: consul start service"
-systemctl enable consul
-service consul start
+#systemctl enable consul
+#service consul start
 
 #echo "[7]: add user xavki / psswd= password"
 #useradd -m -s /bin/bash -p sa3tHJ3/KuYvI -U xavki
 #echo "%xavki ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/xavki
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
+
+######################## CONSUL TEMPLATE #######################################################
+
+apt-get update
+apt-get install -y wget unzip net-tools
+wget https://releases.hashicorp.com/consul-template/0.19.5/consul-template_0.19.5_linux_amd64.zip
+unzip consul-template_0.19.5_linux_amd64.zip
+mv consul-template /usr/local/bin
+chown consul:consul /usr/local/bin/consul-template
+chmod 755 /usr/local/bin/consul-template
+mkdir /etc/consul-template
+chown consul:consul /etc/consul-template
+chmod 775 /etc/consul-template
+
+###################### systemd consul-template ##################
+
+echo '
+[Unit]
+Description=Consul Template adon to consul
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=consul
+ExecStart=/usr/local/bin/consul-template \
+  -consul-addr 127.0.0.1:8500 \
+  -template "/etc/consul-template/haproxy.tmpl:/etc/haproxy/haproxy.cfg:service haproxy reload"
+
+ExecReload=/bin/kill -HUP $MAINPID
+KillSignal=SIGINT
+TimeoutStopSec=5
+Restart=on-failure
+SyslogIdentifier=consul
+
+[Install]
+WantedBy=multi-user.target
+' >/etc/systemd/system/consul-template.service
+
+
+############################# TEMPLATE #########################################################
+
+echo '
+# template consul template pour haproxy
+
+global
+        daemon
+        maxconn 256
+
+    defaults
+        mode http
+        timeout connect 5000ms
+        timeout client 50000ms
+        timeout server 50000ms
+
+frontend monservice
+        bind :80
+        mode http
+        default_backend monservice
+
+backend monservice
+        mode http
+        cookie LBN insert indirect nocache
+        option httpclose
+        option forwardfor
+        balance roundrobin {{ range service monservice }}
+        server {{ .Node }} {{.Address }}:{{ .Port }} {{ end }}
+' >/etc/consul-template/haproxy.tmpl
+
+
+echo "END - install cmaster"
